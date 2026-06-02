@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import zipfile
@@ -9,7 +10,7 @@ import typer
 import requests
 
 from openmower_cli.console import info, error, success, message
-from openmower_cli.constants import FW_BIN_NAME, get_env, XCORE_CONFIG_FILE, BOOTLOADER_BIN_NAME
+from openmower_cli.constants import FW_BIN_NAME, get_env, XCORE_CONFIG_FILE, BOOTLOADER_BIN_NAME, LAST_FIRMWARE_FILE
 from openmower_cli.helpers import fetch_github_release_zip, run
 from openmower_cli.constants import ESC_DEFAULT_PORT, GPS_DEFAULT_PORT, GPS_XCORE_PORT
 
@@ -36,34 +37,35 @@ def _run_socat(port: int, target_ip: str, target_port: int) -> int:
     run(cmd)
     return 0
 
-@openmower_app.command()
-def update_firmware(
-    from_pr: Optional[int] = typer.Option(
-        None,
-        "--from-pr",
-        help="Download firmware built for a specific pull request number.",
-    ),
-    repo: Optional[str] = typer.Option(
-        None,
-        "--repo",
-        "-r",
-        help="GitHub repository in 'owner/name' form (defaults to OPENMOWER_FW_REPO env or 'xtech/fw-openmower-v2').",
-    ),
-    tag: Optional[str] = typer.Option(
-        None,
-        "--tag",
-        "-t",
-        help="Release tag to install (e.g. 'v0.4.2'). Defaults to the latest release.",
-    ),
-):
-    """Update mower firmware to the latest release from fw-openmower-v2.
+def _record_last_firmware(repo: Optional[str], tag: Optional[str]) -> None:
+    """Persist the repo+tag of the firmware we just flashed.
 
-    Steps:
-    - Check FIRMWARE env variable is set
-    - Download a firmware release zip from GitHub (default repo or --repo, latest or --tag),
-      or from the PR API when --from-pr is set
-    - Extract into a temp folder and locate FIRMWARE/firmware.bin
-    - Upload via docker to the mower's xcore boot tool
+    Used by `openmower version save` and automatic backups so they can capture
+    the firmware version. Never raises: best-effort write.
+    """
+    try:
+        LAST_FIRMWARE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LAST_FIRMWARE_FILE, "w") as f:
+            json.dump({"repo": repo, "tag": tag}, f)
+    except Exception:
+        pass
+
+
+def flash_firmware_core(
+    repo: Optional[str] = None,
+    tag: Optional[str] = None,
+    from_pr: Optional[int] = None,
+) -> str:
+    """Download, extract and upload mower firmware to the xCore.
+
+    - repo: GitHub 'owner/name' (defaults to OPENMOWER_FW_REPO env or 'xtech/fw-openmower-v2').
+    - tag: release tag to install (defaults to the latest release).
+    - from_pr: build for a specific PR number; mutually exclusive with repo/tag.
+
+    Requires the FIRMWARE environment variable. Raises typer.Exit on any failure
+    so the `update-firmware` command keeps its exit codes; callers that treat the
+    flash as optional (e.g. `version apply`) may catch typer.Exit. On success the
+    repo+tag is recorded via _record_last_firmware and the resolved tag returned.
     """
     firmware = get_env("FIRMWARE")
     if not firmware:
@@ -96,6 +98,8 @@ def update_firmware(
                             f.write(chunk)
             resolved_tag = f"PR #{from_pr}"
             tmp_handle = td
+        except typer.Exit:
+            raise
         except Exception as e:
             error(f"Failed to fetch PR firmware")
             raise typer.Exit(code=1)
@@ -151,13 +155,51 @@ def update_firmware(
             error("Error uploading firmware.")
             raise
 
+        # Record what we flashed so bundles/backups can capture the version.
+        # Only meaningful for real releases (PR builds have no stable tag).
+        if from_pr is None:
+            _record_last_firmware(selected_repo, resolved_tag)
+
         success(f"Firmware upload finished (release {resolved_tag or 'latest'}).")
+        return resolved_tag or "latest"
     finally:
         # Ensure temporary download directory is removed
         try:
             tmp_handle.cleanup()
         except Exception:
             pass
+
+
+@openmower_app.command()
+def update_firmware(
+    from_pr: Optional[int] = typer.Option(
+        None,
+        "--from-pr",
+        help="Download firmware built for a specific pull request number.",
+    ),
+    repo: Optional[str] = typer.Option(
+        None,
+        "--repo",
+        "-r",
+        help="GitHub repository in 'owner/name' form (defaults to OPENMOWER_FW_REPO env or 'xtech/fw-openmower-v2').",
+    ),
+    tag: Optional[str] = typer.Option(
+        None,
+        "--tag",
+        "-t",
+        help="Release tag to install (e.g. 'v0.4.2'). Defaults to the latest release.",
+    ),
+):
+    """Update mower firmware to the latest release from fw-openmower-v2.
+
+    Steps:
+    - Check FIRMWARE env variable is set
+    - Download a firmware release zip from GitHub (default repo or --repo, latest or --tag),
+      or from the PR API when --from-pr is set
+    - Extract into a temp folder and locate FIRMWARE/firmware.bin
+    - Upload via docker to the mower's xcore boot tool
+    """
+    flash_firmware_core(repo=repo, tag=tag, from_pr=from_pr)
 
 @openmower_app.command("enable-bootloader-developer-mode")
 def enable_bootloader_developer_mode(

@@ -3,6 +3,7 @@ import typer
 import openmower_cli.openmower_commands
 import openmower_cli.openmower_legacy_commands
 import openmower_cli.openmower_common_commands
+import openmower_cli.openmower_version_commands
 from openmower_cli.console import warn
 from openmower_cli.constants import HARDWARE_PLATFORM
 from openmower_cli import __version__
@@ -49,6 +50,8 @@ def create_app():
     else:
         app.add_typer(openmower_cli.openmower_legacy_commands.openmower_legacy_app)
     app.add_typer(openmower_cli.openmower_common_commands.openmower_common_app)
+    # Version-bundle switching is stack-level, so it is always available.
+    app.add_typer(openmower_cli.openmower_version_commands.openmower_version_app)
 
     # Provide `help` as an alias for `--help`
     @app.command("help")

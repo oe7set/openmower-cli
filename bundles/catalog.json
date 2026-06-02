@@ -1,0 +1,23 @@
+{
+  "bundles": [
+    {
+      "app": {
+        "image": "ghcr.io/clemenselflein/openmowerapp",
+        "tag": "v0.4.34-dev"
+      },
+      "created_at": "2026-06-02T00:00:00",
+      "description": "Heatmap + Scheduler + IMU 3D view (oe7set app/ros forks)",
+      "firmware": {
+        "repo": "oe7set/fw-openmower-v2",
+        "tag": "v0.0.8-dev"
+      },
+      "name": "oe7set-app-enhancements",
+      "ros": {
+        "image": "ghcr.io/clemenselflein/open_mower_ros",
+        "tag": "v1.2.25-dev"
+      },
+      "schema": 1
+    }
+  ],
+  "schema": 1
+}

@@ -81,6 +81,64 @@ Notes:
 - The CLI uses `/usr/bin/docker compose -f /opt/stacks/openmower/compose.yaml ...` under the hood.
 - Ensure your user can run Docker commands (e.g., part of the `docker` group) or run with appropriate privileges.
 
+### Version bundles
+
+A *version bundle* pins the versions of the high-level stack components — the
+`open_mower_ros` image, the `OpenMowerApp` image, and (optionally) a firmware
+release — together with a short description. You can save the versions you are
+currently running as a bundle (a backup), and switch between bundles later.
+Each component may come from a different repository/registry, so bundles work
+across forks.
+
+Bundles come from two sources, merged into one list:
+- **Local** bundles you saved (JSON files under `~/.config/openmower-cli/bundles/`),
+  including automatic backups created before each switch.
+- A curated **remote catalog** (configurable via `OPENMOWER_BUNDLE_CATALOG_URL`).
+  When offline, the catalog is simply skipped.
+
+```bash
+# List local bundles, backups and the catalog
+openmower version list
+
+# Save the currently configured versions as a bundle
+openmower version save my-stable -d "Known-good setup"
+# ...or pin specific versions explicitly
+openmower version save heatmap -d "Heatmap + scheduler" \
+  --ros-tag v1.2.25-dev --app-tag v0.4.34-dev \
+  --fw-repo oe7set/fw-openmower-v2 --fw-tag v0.0.8-dev
+
+# Show one bundle in detail
+openmower version show heatmap
+
+# Switch to a bundle (writes the compose .env and redeploys the stack).
+# Omit the name to pick interactively from the list.
+openmower version apply heatmap
+openmower version apply                       # interactive selection
+openmower version apply heatmap --with-firmware   # also flash the pinned firmware
+openmower version apply heatmap -y --no-firmware  # non-interactive, ROS/App only
+
+# Remove a saved bundle
+openmower version delete heatmap
+```
+
+Notes:
+- **Switching backs up the current versions automatically** (as a `backup-<timestamp>`
+  bundle) before applying, so you can always switch back. The newest 10 backups are kept.
+- **App switching requires a one-time `migrate-compose` per host.** Older installs
+  ship a `compose.yaml` with the App image hardcoded to `:latest`, so the
+  `APP_IMAGE`/`APP_VERSION` variables have no effect until the compose file is made
+  switch-ready. ROS switching via `${VERSION}` works regardless.
+  ```bash
+  openmower version migrate-compose      # writes a .bak backup, then rewrites the image lines
+  ```
+  `apply` detects a non-migrated compose file and offers to run this for you.
+- **Firmware** is flashed separately (the firmware is not a Docker image). Bundles
+  pin a firmware repo+tag; switching only flashes it when you pass `--with-firmware`
+  (or confirm the prompt). The firmware version of a bundle saved from the current
+  state is captured only if you flashed firmware through this CLI (it records the
+  repo+tag in `~/.config/openmower-cli/last_firmware.json`) or if you pass
+  `--fw-repo`/`--fw-tag` explicitly.
+
 ### Self-update (zipapp distribution)
 If you run the zipapp build (a single-file `openmower` executable), you can self-update from GitHub releases:
 ```bash

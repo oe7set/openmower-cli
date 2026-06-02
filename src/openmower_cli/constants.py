@@ -50,6 +50,26 @@ LAST_CHECK_FILE: Path = Path(os.path.expanduser("~/.config/openmower-cli/last_up
 SETTINGS_FILE: Path = Path(os.path.expanduser("~/.config/openmower-cli/settings.json"))
 XCORE_CONFIG_FILE: Path = Path(os.path.expanduser("~/.config/openmower-cli/xcore.cfg"))
 
+# Version bundles (see openmower_version_commands.py)
+# Local bundles are stored as one JSON file per bundle in this directory.
+BUNDLES_DIR: Path = Path(os.path.expanduser("~/.config/openmower-cli/bundles"))
+# Records the repo+tag of the firmware last flashed via this CLI, so that saved
+# bundles / automatic backups can capture the firmware version (the host itself
+# only stores the FIRMWARE identifier, e.g. "yardforce", not a version).
+LAST_FIRMWARE_FILE: Path = Path(os.path.expanduser("~/.config/openmower-cli/last_firmware.json"))
+# Curated remote catalog of version bundles, merged into `openmower version list`.
+BUNDLE_CATALOG_URL: str = get_env(
+    "OPENMOWER_BUNDLE_CATALOG_URL",
+    "https://raw.githubusercontent.com/oe7set/openmower-cli/feature/version-bundles/bundles/catalog.json",
+)
+# Canonical default images, used when a bundle does not pin a specific image.
+# These must match the `:-default` fallbacks written into compose.yaml.
+DEFAULT_ROS_IMAGE: str = "ghcr.io/clemenselflein/open_mower_ros"
+DEFAULT_APP_IMAGE: str = "ghcr.io/clemenselflein/openmowerapp"
+# Registries a bundle image may reference. Guards the values that flow into
+# `docker pull` / the compose `.env` against injection from the remote catalog.
+ALLOWED_IMAGE_REGISTRIES: tuple[str, ...] = ("ghcr.io/", "docker.io/", "registry.hub.docker.com/")
+
 
 # Default ports for exposing xESC and IMU
 ESC_DEFAULT_PORT = 65102
