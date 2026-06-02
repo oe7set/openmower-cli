@@ -124,14 +124,20 @@ openmower version delete heatmap
 Notes:
 - **Switching backs up the current versions automatically** (as a `backup-<timestamp>`
   bundle) before applying, so you can always switch back. The newest 10 backups are kept.
-- **App switching requires a one-time `migrate-compose` per host.** Older installs
-  ship a `compose.yaml` with the App image hardcoded to `:latest`, so the
-  `APP_IMAGE`/`APP_VERSION` variables have no effect until the compose file is made
-  switch-ready. ROS switching via `${VERSION}` works regardless.
+- **Switching requires a one-time `migrate-compose` per host.** Bundles set image
+  versions through `.env` variables, so the `compose.yaml` image lines must
+  reference them first. `migrate-compose` does this by service name — it
+  parameterizes the `open_mower_ros` service and the web-app service (the first of
+  `app`, `openmower-app`, `OpenMowerApp` present in the file), keeping whatever
+  image and tag they currently use as the defaults. It also reverts any other
+  service that a previous run parameterized by mistake.
   ```bash
   openmower version migrate-compose      # writes a .bak backup, then rewrites the image lines
   ```
   `apply` detects a non-migrated compose file and offers to run this for you.
+- **Tag conventions:** ROS/App **image** tags follow the GHCR images, which drop the
+  leading `v` (e.g. `1.2.26-dev`, `edge`). Firmware tags are GitHub release tags and
+  keep the `v` (e.g. `v0.0.8-dev`).
 - **Firmware** is flashed separately (the firmware is not a Docker image). Bundles
   pin a firmware repo+tag; switching only flashes it when you pass `--with-firmware`
   (or confirm the prompt). The firmware version of a bundle saved from the current

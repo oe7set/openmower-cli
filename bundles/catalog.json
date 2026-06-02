@@ -13,6 +13,7 @@
       },
       "name": "official-edge",
       "ros": {
+        "image": "ghcr.io/clemenselflein/open_mower_ros",
         "tag": "edge"
       },
       "schema": 1
@@ -23,21 +24,22 @@
         "tag": "edge"
       },
       "created_at": "2026-06-02T00:00:00",
-      "description": "Official, latest release: open_mower_ros v1.2.0, firmware v0.0.6 (App only available as edge).",
+      "description": "Official, latest release: open_mower_ros 1.2.0, firmware v0.0.6 (App only available as edge).",
       "firmware": {
         "repo": "xtech/fw-openmower-v2",
         "tag": "v0.0.6"
       },
       "name": "official-release",
       "ros": {
-        "tag": "v1.2.0"
+        "image": "ghcr.io/clemenselflein/open_mower_ros",
+        "tag": "1.2.0"
       },
       "schema": 1
     },
     {
       "app": {
         "image": "ghcr.io/oe7set/openmower-app",
-        "tag": "v0.4.36-dev"
+        "tag": "0.4.36-dev"
       },
       "created_at": "2026-06-02T00:00:00",
       "description": "oe7set fork (feature/app-enhancements): dashboard cards, tasks/scheduler, heatmap telemetry replay, logs viewer, statistics, quick actions, GPS status (sats/PDOP) + WiFi, IMU 3D view, new RPCs (config/schedule/logs/telemetry).",
@@ -48,7 +50,7 @@
       "name": "oe7set-app-enhancements",
       "ros": {
         "image": "ghcr.io/oe7set/open_mower_ros",
-        "tag": "v1.2.26-dev"
+        "tag": "1.2.26-dev"
       },
       "schema": 1
     }
