@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import time
 import zipfile
 import tempfile
@@ -9,10 +10,11 @@ from typing import Optional
 import typer
 import requests
 
-from openmower_cli.console import info, error, success, message
+from openmower_cli.console import info, error, success, message, warn
 from openmower_cli.constants import FW_BIN_NAME, get_env, XCORE_CONFIG_FILE, BOOTLOADER_BIN_NAME, LAST_FIRMWARE_FILE
 from openmower_cli.helpers import fetch_github_release_zip, run
 from openmower_cli.constants import ESC_DEFAULT_PORT, GPS_DEFAULT_PORT, GPS_XCORE_PORT
+from openmower_cli.constants import DOCKER_BIN, COMPOSE_FILE, DEFAULT_SERVICE
 
 openmower_app = typer.Typer(help="OpenMower Commands")
 
@@ -353,11 +355,62 @@ def serial_bridge(
     raise typer.Exit(code=code)
 
 
+def _set_gnss_parser_enabled(enabled: bool) -> bool:
+    """Pause/resume the in-container gnss_detail_parser so it releases TCP port 10000.
+
+    The xCore debug port (10000) serves a single client. The gnss_detail_parser
+    normally holds that slot, so we ask it to step aside while `expose-gps` bridges
+    the port to u-center, then give the port back on exit.
+
+    Best-effort: returns True on success, False otherwise. Never raises — expose-gps
+    must still work on HWv1, with OM_NO_GNSS_DETAIL=True, or when the stack is down.
+
+    `docker compose exec` does NOT run the container entrypoint, so ROS is not
+    sourced in the exec'd process. We source it ourselves (mirroring
+    openmower_entrypoint.sh) before calling rosservice.
+    """
+    data = "true" if enabled else "false"
+    inner = (
+        'source "/opt/ros/$ROS_DISTRO/setup.bash" && '
+        "source /opt/open_mower_ros/devel/setup.bash && "
+        f'rosservice call /gnss_detail_parser/set_enabled "data: {data}"'
+    )
+    cmd = [
+        DOCKER_BIN, "compose", "-f", COMPOSE_FILE,
+        "exec", "-T", DEFAULT_SERVICE,
+        "bash", "-lc", inner,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except Exception:
+        return False
+    return proc.returncode == 0
+
+
 @openmower_app.command("expose-gps")
 def expose_gps(
     port: int = typer.Option(GPS_DEFAULT_PORT, "--port", "-p", help=f"TCP port to listen on (default: {GPS_DEFAULT_PORT})"),
 ):
-    """Expose the xCore GPS raw-passthrough over TCP so u-center can connect."""
+    """Expose the xCore GPS raw-passthrough over TCP so u-center can connect.
+
+    The xCore debug port 10000 serves a single client. The on-board
+    gnss_detail_parser normally holds that slot, so before bridging we ask it to
+    release the port (auto-handoff) and re-enable it when this command exits.
+    """
+    paused = _set_gnss_parser_enabled(False)
+    if paused:
+        info("Paused gnss_detail_parser; the app GNSS page will be empty until you stop expose-gps.")
+    else:
+        warn("Could not pause gnss_detail_parser (not running / HWv1 / disabled). "
+             "If u-center cannot connect, the parser may still be holding port 10000.")
+
     info(f"You can now run u-center and connect to port {port}")
-    code = _run_socat(target_ip="172.16.78.150", target_port=GPS_XCORE_PORT, port=port)
+    try:
+        code = _run_socat(target_ip="172.16.78.150", target_port=GPS_XCORE_PORT, port=port)
+    finally:
+        # Always try to resume the parser, even on Ctrl-C / socat error.
+        if _set_gnss_parser_enabled(True):
+            info("Resumed gnss_detail_parser.")
+        elif paused:
+            warn("Failed to resume gnss_detail_parser automatically; restart the stack to restore the GNSS page.")
     raise typer.Exit(code=code)
